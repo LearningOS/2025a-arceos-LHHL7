@@ -163,11 +163,20 @@ pub fn stdout() -> Stdout {
 
 #[doc(hidden)]
 pub fn __print_impl(args: core::fmt::Arguments) {
-    if cfg!(feature = "smp") {
+    // 添加编译错误来测试
+    // compile_error!("AXSTD_COLOR_DEBUG: 确认axstd被编译");
+
+    let color_code = "\x1b[31m"; // 代表显示红色的控制序列
+    let reset_code = "\x1b[0m";//reset_code (\x1b[0m) 是最重要的控制序列之一，
+    // 它告诉终端："到此为止，把所有文本属性恢复到默认状态"
+     // 添加测试输出
+    // let test_output = format_args!("{}[DEBUG]彩色输出测试{} ", color_code, reset_code);
+    if cfg!(feature = "smp") {//这里的cfg! 是一个编译时布尔检查，返回 true 或 false
         // synchronize using the lock in axlog, to avoid interleaving
         // with kernel logs
-        arceos_api::stdio::ax_console_write_fmt(args).unwrap();
+        arceos_api::stdio::ax_console_write_fmt(format_args!("{}{}{}",color_code,args,reset_code)).unwrap();
     } else {
-        stdout().lock().write_fmt(args).unwrap();
-    }
+        stdout().lock().write_fmt(format_args!("{}{}{}",color_code,args,reset_code)).unwrap();
+    }//format_args!是标准化输出宏 可以记录输出的组合信息
+    // 将控制序列与args组合到一起时  其中的控制序列不会显示 而是影响后续文本的属性
 }

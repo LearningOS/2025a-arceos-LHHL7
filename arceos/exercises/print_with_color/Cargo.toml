@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axstd = { workspace = true, optional = true }
+axstd = { workspace = true,optional = true }
+
+[features]
+default = ["axstd"]  # 关键：默认启用 axstd
