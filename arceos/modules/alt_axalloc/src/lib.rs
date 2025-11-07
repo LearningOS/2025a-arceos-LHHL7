@@ -96,7 +96,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         GlobalAllocator::dealloc(self, NonNull::new(ptr).expect("dealloc null ptr"), layout)
     }
 }
-
+//满足条件时作为全局分配器 all()代表同时满足  条件1 target_os = "none" 目标系统是裸机 条件2 not(test) 不是测试环境
 #[cfg_attr(all(target_os = "none", not(test)), global_allocator)]
 static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator::new();
 
