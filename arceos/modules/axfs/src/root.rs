@@ -1,13 +1,14 @@
 //! Root directory of the filesystem
 //!
 //! TODO: it doesn't work very well if the mount points have containment relationships.
+// 未来改进方向 - 需要更智能的挂载点管理
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 use axerrno::{ax_err, AxError, AxResult};
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
 use axsync::Mutex;
 use lazyinit::LazyInit;
-
+use core::any;
 use crate::{api::FileType, fs, mounts};
 
 static CURRENT_DIR_PATH: Mutex<String> = Mutex::new(String::new());
@@ -59,6 +60,8 @@ impl RootDirectory {
         self.main_fs.root_dir().create(path, FileType::Dir)?;
         fs.mount(path, self.main_fs.root_dir().lookup(path)?)?;
         self.mounts.push(MountPoint::new(path, fs));
+        //
+        // log::error!("[root.rs --mount]mount path:{} ",path);
         Ok(())
     }
 
@@ -69,7 +72,8 @@ impl RootDirectory {
     pub fn contains(&self, path: &str) -> bool {
         self.mounts.iter().any(|mp| mp.path == path)
     }
-
+    //mounted" 意思是 "挂载"。
+    //根据路径查找挂载的文件系统
     fn lookup_mounted_fs<F, T>(&self, path: &str, f: F) -> AxResult<T>
     where
         F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,
@@ -82,7 +86,7 @@ impl RootDirectory {
 
         let mut idx = 0;
         let mut max_len = 0;
-
+        let mut matched_mount = "";
         // Find the filesystem that has the longest mounted path match
         // TODO: more efficient, e.g. trie
         for (i, mp) in self.mounts.iter().enumerate() {
@@ -90,12 +94,18 @@ impl RootDirectory {
             if path.starts_with(&mp.path[1..]) && mp.path.len() - 1 > max_len {
                 max_len = mp.path.len() - 1;
                 idx = i;
+                //调试
+                matched_mount = mp.path;
+                // log::error!("[root.rs]     ✅ MATCHED mount: '{}'", matched_mount);
             }
         }
 
         if max_len == 0 {
+            // log::error!("[root.rs]   - ❌ NO mount point matched");
             f(self.main_fs.clone(), path) // not matched any mount point
+            //fs，rest_path此时相当于被赋值了
         } else {
+            // log::error!("[root.rs]   - ✅ Using mount point: '{}'", matched_mount);
             f(self.mounts[idx].fs.clone(), &path[max_len..]) // matched at `idx`
         }
     }
@@ -131,25 +141,54 @@ impl VfsNodeOps for RootDirectory {
             }
         })
     }
-
+    //闭包的参数一般由调用者提供 即fs，rest_path在lookup_mounted_fs的内部会被赋值
+    //捕获外部变量指闭包体里能用外部变量
+    //这个rename也是一个封装 是得到src_path的rest_path 然后交由src_path的fs来rename
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        log::error!("[root.rs] rename start");
         self.lookup_mounted_fs(src_path, |fs, rest_path| {
+            // log::error!("[root.rs] fs actual type: {}", any::type_name_of_val(&*fs));
             if rest_path.is_empty() {
                 ax_err!(PermissionDenied) // cannot rename mount points
             } else {
+                log::error!("[root.rs] enter next layer rename ");
                 fs.root_dir().rename(rest_path, dst_path)
+                // // 分步执行，检查每一步
+                //     log::error!("[root.rs] STEP 1: Calling fs.root_dir()...");
+                //     let root_dir = fs.root_dir();
+                //     log::error!("[root.rs]   - root_dir obtained, type: {}", any::type_name_of_val(&*root_dir));
+                    
+                //     log::error!("[root.rs] STEP 2: Calling root_dir.rename('{}', '{}')...", rest_path, dst_path);
+                //     let rename_result = root_dir.rename(rest_path, dst_path);
+                //     log::error!("[root.rs]   - rename result: {:?}", rename_result);
+                    
+                //     rename_result
             }
         })
     }
 }
+//初始化文件系统
+pub(crate) fn init_rootfs(disk: Option<crate::dev::Disk>) {
+    // 确切的代码路径标记
+    #[cfg(feature = "myfs")]
+    log::error!("COMPILING: myfs branch");
+    
+    #[cfg(feature = "ramfs")]
+    log::error!("COMPILING: ramfs branch");
+    
+    #[cfg(feature = "fatfs")] 
+    log::error!("COMPILING: fatfs branch");
 
-pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "myfs")] { // override the default filesystem
-            let main_fs = fs::myfs::new_myfs(disk);
-        } else if #[cfg(feature = "fatfs")] {
+        if #[cfg(feature = "ramfs")] {// 新增：优先使用 ramfs
+            let main_fs = mounts::ramfs();
+            info!("Using RAMFS as main filesystem");
+        }else if #[cfg(feature = "myfs")] { // override the default filesystem
+            let main_fs = fs::myfs::new_myfs(disk.unwrap());
+        }
+        else if #[cfg(feature = "fatfs")] {
             static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();
-            FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk)));
+            FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk.unwrap())));
             FAT_FS.init();
             let main_fs = FAT_FS.clone();
         }
@@ -183,12 +222,14 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     CURRENT_DIR.init_once(Mutex::new(ROOT_DIR.clone()));
     *CURRENT_DIR_PATH.lock() = "/".into();
 }
-
+//找父目录节点 dir是起始目录 path是路径
 fn parent_node_of(dir: Option<&VfsNodeRef>, path: &str) -> VfsNodeRef {
-    if path.starts_with('/') {
+    if path.starts_with('/') {//path是绝对路径 那么返回根目录
         ROOT_DIR.clone()
     } else {
         dir.cloned().unwrap_or_else(|| CURRENT_DIR.lock().clone())
+        //相对路径 1 若dir存在 返回dir
+        //2 若dir不存在 则返回当前工作目录
     }
 }
 
@@ -301,6 +342,7 @@ pub(crate) fn set_current_dir(path: &str) -> AxResult {
     }
 }
 
+//pub(crate) fn 是对当前crate公开 外部不能访问  pub fn是完全公开
 pub(crate) fn rename(old: &str, new: &str) -> AxResult {
     if parent_node_of(None, new).lookup(new).is_ok() {
         warn!("dst file already exist, now remove it");

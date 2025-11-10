@@ -85,5 +85,5 @@ pub fn remove_file(path: &str) -> io::Result<()> {
 ///
 /// This only works then the new path is in the same mounted fs.
 pub fn rename(old: &str, new: &str) -> io::Result<()> {
-    crate::root::rename(old, new)
+    crate::root::rename(old, new)//crate代表本crate axfs
 }

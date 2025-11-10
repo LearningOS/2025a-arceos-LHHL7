@@ -18,6 +18,8 @@ pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
 
 #[cfg(feature = "ramfs")]
 pub(crate) fn ramfs() -> Arc<fs::ramfs::RamFileSystem> {
+    //
+    log::error!("[mount.rs]create a ramfs");
     Arc::new(fs::ramfs::RamFileSystem::new())
 }
 

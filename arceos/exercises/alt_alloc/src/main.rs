@@ -13,6 +13,11 @@ use alloc::vec::Vec;
 fn main() {
     println!("Running bump tests...");
 
+    #[cfg(feature = "axstd")]
+    println!("axstd feature is ENABLED");
+    
+    #[cfg(not(feature = "axstd"))]
+    println!("axstd feature is DISABLED");
     const N: usize = 3_000_000;
     let mut v = Vec::with_capacity(N);
     for i in 0..N {

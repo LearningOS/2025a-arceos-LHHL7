@@ -38,9 +38,26 @@ use axdriver::{prelude::*, AxDeviceContainer};
 
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
+    // info!("Initialize filesystems...");
+
+    // let dev = blk_devs.take_one().expect("No block device found!");
+    // info!("  use block device 0: {:?}", dev.device_name());
+    // self::root::init_rootfs(self::dev::Disk::new(dev));
     info!("Initialize filesystems...");
 
-    let dev = blk_devs.take_one().expect("No block device found!");
-    info!("  use block device 0: {:?}", dev.device_name());
-    self::root::init_rootfs(self::dev::Disk::new(dev));
+    #[cfg(feature = "fatfs")]
+    {
+        if let Some(dev) = blk_devs.take_one() {
+            let disk = self::dev::Disk::new(dev);
+            self::root::init_rootfs(Some(disk)); // 传递 Some(disk)
+        } else {
+            warn!("No block device for FATFS, but RAMFS will be used");
+            self::root::init_rootfs(None); // 传递 None
+        }
+    }
+    
+    #[cfg(not(feature = "fatfs"))]
+    {
+        self::root::init_rootfs(None); // 不需要磁盘
+    }
 }

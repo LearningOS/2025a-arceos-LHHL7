@@ -1,7 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
 use alloc::{string::String, vec::Vec};
-
+use crate::alloc::string::ToString;
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType};
 use axfs_vfs::{VfsError, VfsResult};
 use spin::RwLock;
@@ -14,7 +14,9 @@ use crate::file::FileNode;
 pub struct DirNode {
     this: Weak<DirNode>,
     parent: RwLock<Weak<dyn VfsNodeOps>>,
-    children: RwLock<BTreeMap<String, VfsNodeRef>>,
+    children: RwLock<BTreeMap<String, VfsNodeRef>>,//目录项表
+    //                        ↑文件名    ↑文件实体（相当于inode的抽象
+    //BTreeMap数据结构相当于一个map 存键值对 但是将键值对插到平衡二叉树 内部是有序的并且迭代的时候按照键的顺序
 }
 
 impl DirNode {
@@ -65,6 +67,27 @@ impl DirNode {
             }
         }
         children.remove(name);
+        Ok(())
+    }
+    fn rename_in_same_dir(&self, old_name: &str, new_name: &str) -> VfsResult {
+        log::error!("[dir] call rename_in_same_dir oldname:{},newname:{}",old_name,new_name);
+        let mut children = self.children.write();  // Rwlock是读写锁 通过.write（） 获取写锁
+        //可以有多个读锁（共享） 或者有一个写锁（独占） 但不能同时有读锁和写锁
+        // 现在可以安全地修改 children...
+        log::error!("[dir] getting node");
+        let node=children.get(old_name).ok_or(VfsError::NotFound)?.clone();//找到old_name对应inode
+        //get是通过键查找值 返回option  ok_or(E)将option<T>转化为Result<T,E>
+        // ?操作符可以跟在option或者result后面 成功了就解包 失败了就提前返回
+         // 检查目标是否已存在
+        if children.contains_key(new_name) {
+            return Err(VfsError::AlreadyExists);
+        }
+         // 关键操作：修改名称映射，不复制数据！
+        children.remove(old_name);
+        children.insert(new_name.to_string(),node);// 同一个 node 对象！
+
+        log::error!("[dir] complete rename in same dir!");
+        // VfsResult的定义 等价于：type VfsResult<T> = Result<T, VfsError>;
         Ok(())
     }
 }
@@ -164,11 +187,22 @@ impl VfsNodeOps for DirNode {
             self.remove_node(name)
         }
     }
-
-    axfs_vfs::impl_vfs_dir_default! {}
+    
+    fn rename(&self,src_path:&str,dst_path:&str)->VfsResult{
+        log::error!("[dir] call rename");
+        //现在先实现只支持在同一目录下重命名
+        let (src_name, src_rest) = split_path(src_path);
+        let (dst_dir,dst_rest)=split_path(dst_path);
+        let dst_rest=dst_rest.unwrap();
+        //
+        
+        self.rename_in_same_dir(src_name, dst_rest)
+    }
+    axfs_vfs::impl_vfs_dir_default! {}//提供了其他方法的默认实现
+    //经过查cargo.lock 发现axfs_vfs是外部依赖
 }
 
-fn split_path(path: &str) -> (&str, Option<&str>) {
+fn split_path(path: &str) -> (&str, Option<&str>) {//去掉开头的/  再以中间的第一个/进行切分
     let trimmed_path = path.trim_start_matches('/');
     trimmed_path.find('/').map_or((trimmed_path, None), |n| {
         (&trimmed_path[..n], Some(&trimmed_path[n + 1..]))

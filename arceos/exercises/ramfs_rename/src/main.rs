@@ -9,6 +9,9 @@ mod ramfs;
 
 use std::io::{self, prelude::*};
 use std::fs::{self, File};
+//self相当于模块本身 相当于：
+//use std::fs;
+//use std::fs::File;
 
 fn create_file(fname: &str, text: &str) -> io::Result<()> {
     println!("Create '{}' and write [{}] ...", fname, text);
@@ -47,6 +50,13 @@ fn process() -> io::Result<()> {
 
 #[cfg_attr(feature = "axstd", no_mangle)]
 fn main() {
+    //测试axstd是否启用---start---
+    #[cfg(feature = "axstd")]
+    println!("axstd feature is ENABLED");
+    
+    #[cfg(not(feature = "axstd"))]
+    println!("axstd feature is DISABLED");
+    //----end------
     if let Err(e) = process() {
         panic!("Error: {}", e);
     }

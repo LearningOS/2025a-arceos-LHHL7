@@ -192,8 +192,8 @@ pub mod fs {
         pub type MyFileSystemIf;
     }
 
-    define_api! {
-        @cfg "fs";
+    define_api! {//定义了api后  用户程序、开启了fs特性的上层crate都可以直接用函数
+        @cfg "fs";//// 条件编译：只有在启用 "fs" 特性时才包含此API
 
         /// Opens a file at the path relative to the current directory with the
         /// options specified by `opts`.
