@@ -52,11 +52,19 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
-
+// 确保 hashbrown 可用
+#[cfg(feature = "alloc")]
+extern crate hashbrown;
 #[cfg(feature = "alloc")]
 #[doc(no_inline)]
-pub use alloc::{boxed, collections, format, string, vec};
-
+// pub use alloc::{boxed, collections, format, string, vec};
+pub use alloc::{boxed,format, string, vec};
+pub mod collections{
+     // 使用 hashbrown 的 HashMap
+    pub use hashbrown::HashMap;
+    pub use alloc::vec::Vec;
+    pub use alloc::string::String;
+}
 #[doc(no_inline)]
 pub use core::{arch, cell, cmp, hint, marker, mem, ops, ptr, slice, str};
 

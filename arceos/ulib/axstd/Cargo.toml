@@ -80,3 +80,5 @@ arceos_api = { workspace = true }
 axio = "0.1"
 axerrno = "0.1"
 kspin = "0.1"
+# 添加 hashbrown 依赖
+hashbrown = "0.16"  # 或者使用项目中已有的版本 "0.16"
