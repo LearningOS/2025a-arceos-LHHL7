@@ -11,7 +11,7 @@ use axhal::paging::MappingFlags;
 use arceos_posix_api::{self as api, get_file_like};
 use memory_addr::{align_up_4k, AddrRange, PAGE_SIZE_4K};
 use crate::task::TaskExt;
-
+use crate::VirtAddr;
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
 const SYS_CLOSE: usize = 57;
@@ -144,63 +144,64 @@ fn sys_mmap(
     _offset: isize,
 ) -> isize {
     // unimplemented!("no sys_mmap!");
-    let curr = current();//得到当前进程的task 相当于任务控制块
-    let ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };//获取任务扩展数据
-    let mut space = ext.aspace.lock();//得到任务的地址空间
+    return 1;//测试
+    // let curr = current();//得到当前进程的task 相当于任务控制块
+    // let ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };//获取任务扩展数据
+    // let mut space = ext.aspace.lock();//得到任务的地址空间
 
-    let flags = MmapFlags::from_bits_truncate(flags);//两个标志转换 flags代表映射行为标志 包括修改后对其他进程是否共享等
-    let prot = MmapProt::from_bits_truncate(prot);//prot表示映射的内存权限 是否可读写等
-    let len = align_up_4k(len);
+    // let flags = MmapFlags::from_bits_truncate(flags);//两个标志转换 flags代表映射行为标志 包括修改后对其他进程是否共享等
+    // let prot = MmapProt::from_bits_truncate(prot);//prot表示映射的内存权限 是否可读写等
+    // let len = align_up_4k(length);
 
-    // 1. 选地址
-    let vaddr = if flags.contains(MmapFlags::MAP_FIXED) {
-        VirtAddr::from(addr as usize)//CASE1:强制使用指定地址 无论地址是否可用
-    } else if addr.is_null() {//CASE2：addr.is_null() 代表内核自己决定
-        space.find_free_area(space.base() + PAGE_SIZE_4K, len,
-                             AddrRange::new(space.base(), space.end()))?
-    } else {
-        VirtAddr::from(addr as usize)//CASE3：其他情况 使用提示的地址
-    };
+    // // 1. 选地址
+    // let vaddr = if flags.contains(MmapFlags::MAP_FIXED) {
+    //     VirtAddr::from(addr as usize)//CASE1:强制使用指定地址 无论地址是否可用
+    // } else if addr.is_null() {//CASE2：addr.is_null() 代表内核自己决定
+    //     space.find_free_area(space.base() + PAGE_SIZE_4K, len,
+    //                          AddrRange::new(space.base(), space.end()))?
+    // } else {
+    //     VirtAddr::from(addr as usize)//CASE3：其他情况 使用提示的地址
+    // };
 
-    // 2. 映射页表
-    space.map_alloc(vaddr, len, MappingFlags::from(prot) | MappingFlags::USER, true)
-        .map_err(|_| LinuxError::ENOMEM)?;
-        //在用户地址空间中，建立从虚拟地址 vaddr 开始、长度为 len 的区域与物理页的映射关系
-        //分配了物理页 并在页表建立了映射
+    // // 2. 映射页表
+    // space.map_alloc(vaddr, len, MappingFlags::from(prot) | MappingFlags::USER, true)
+    //     .map_err(|_| LinuxError::ENOMEM)?;
+    //     //在用户地址空间中，建立从虚拟地址 vaddr 开始、长度为 len 的区域与物理页的映射关系
+    //     //分配了物理页 并在页表建立了映射
 
-    // 3. 填充内容
-    if !flags.contains(MmapFlags::MAP_ANONYMOUS) {
-        let file = get_file_like(fd)?;
-        let file_size = file.get_size();  // 获取文件大小
+    // // 3. 填充内容
+    // if !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+    //     let file = get_file_like(fd)?;
+    //     let file_size = file.get_size();  // 获取文件大小
         
-        // 计算实际需要读取的字节数
-        let read_len = len.min(file_size.saturating_sub(offset as usize));
+    //     // 计算实际需要读取的字节数
+    //     let read_len = len.min(file_size.saturating_sub(_offset as usize));
         
-        let mut remain = read_len;
-        let mut off = offset as usize;
-        let mut va = vaddr;
-        //将虚拟地址转化为内核可访问的多个内核缓冲区 内部是转化为物理地址 再转化为内核虚拟地址
-        //这样将文件读到这些内核缓冲区
-        for buf in space.translated_byte_buffer(va, read_len)? {
-            if remain == 0 { break; }
+    //     let mut remain = read_len;
+    //     let mut off = _offset as usize;
+    //     let mut va = vaddr;
+    //     //将虚拟地址转化为内核可访问的多个内核缓冲区 内部是转化为物理地址 再转化为内核虚拟地址
+    //     //这样将文件读到这些内核缓冲区
+    //     for buf in space.translated_byte_buffer(va, read_len)? {
+    //         if remain == 0 { break; }
             
-            let read = file.read_at(off, buf)? as usize;
-            if read == 0 { 
-                // 文件结束但还有剩余空间，填充0或报错？
-                break; 
-            }
+    //         let read = file.read_at(off, buf)? as usize;
+    //         if read == 0 { 
+    //             // 文件结束但还有剩余空间，填充0或报错？
+    //             break; 
+    //         }
             
-            off += read;
-            remain = remain.saturating_sub(read);
-        }
+    //         off += read;
+    //         remain = remain.saturating_sub(read);
+    //     }
         
-        // 如果是 MAP_PRIVATE，标记为写时复制？
-        if flags.contains(MmapFlags::MAP_PRIVATE) {
-            // 可能需要特殊的处理
-        }
-    }
+    //     // 如果是 MAP_PRIVATE，标记为写时复制？
+    //     if flags.contains(MmapFlags::MAP_PRIVATE) {
+    //         // 可能需要特殊的处理
+    //     }
+    // }
 
-    Ok(vaddr.as_usize() as isize)
+    // Ok(vaddr.as_usize() as isize)
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {
