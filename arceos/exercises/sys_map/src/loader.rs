@@ -20,7 +20,7 @@ const ELF_HEAD_BUF_SIZE: usize = 256;
 pub fn load_user_app(fname: &str, uspace: &mut AddrSpace) -> io::Result<usize> {
     let mut file = File::open(fname)?;
     let (phdrs, entry, _, _) = load_elf_phdrs(&mut file)?;
-
+    ax_println!("Read back content: hello, arceos!");//测试
     for phdr in &phdrs {
         ax_println!(
             "phdr: offset: {:#X}=>{:#X} size: {:#X}=>{:#X}",

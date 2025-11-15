@@ -170,23 +170,17 @@ impl VfsNodeOps for RootDirectory {
 //初始化文件系统
 pub(crate) fn init_rootfs(disk: Option<crate::dev::Disk>) {
     // 确切的代码路径标记
-    #[cfg(feature = "myfs")]
-    log::error!("COMPILING: myfs branch");
-    
-    #[cfg(feature = "ramfs")]
-    log::error!("COMPILING: ramfs branch");
-    
-    #[cfg(feature = "fatfs")] 
-    log::error!("COMPILING: fatfs branch");
-
     cfg_if::cfg_if! {
-        if #[cfg(feature = "ramfs")] {// 新增：优先使用 ramfs
-            let main_fs = mounts::ramfs();
-            info!("Using RAMFS as main filesystem");
-        }else if #[cfg(feature = "myfs")] { // override the default filesystem
+        // if #[cfg(feature = "ramfs")] {// 新增：优先使用 ramfs
+        //     let main_fs = mounts::ramfs();
+        //     info!("Using RAMFS as main filesystem");
+        // }else 
+        if #[cfg(feature = "myfs")] { // override the default filesystem
+            log::error!("COMPILING: myfs branch");
             let main_fs = fs::myfs::new_myfs(disk.unwrap());
         }
         else if #[cfg(feature = "fatfs")] {
+            log::error!("COMPILING: fatfs branch");
             static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();
             FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk.unwrap())));
             FAT_FS.init();

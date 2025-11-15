@@ -16,6 +16,10 @@ use axstd::io;
 use axhal::paging::MappingFlags;
 use axhal::arch::UspaceContext;
 use axhal::mem::VirtAddr;
+
+use axhal::trap::{register_trap_handler,PAGE_FAULT};
+use axtask::TaskExtRef;
+
 use axsync::Mutex;
 use alloc::sync::Arc;
 use alloc::string::String;
@@ -39,7 +43,7 @@ fn main() {
     ax_println!("entry: {:#x}", entry);
 
     // Init user stack.
-    let ustack_top = init_user_stack(&mut uspace, true).unwrap();
+    let ustack_top = init_user_stack(&mut uspace, true).unwrap();//本来是true
     ax_println!("New user address space: {:#x?}", uspace);
 
     // Let's kick off the user process.
@@ -80,3 +84,23 @@ fn init_user_stack(uspace: &mut AddrSpace, populating: bool) -> io::Result<VirtA
 
     Ok(ustack_pointer.into())
 }
+#[register_trap_handler(PAGE_FAULT)]
+fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
+    if is_user {
+        if !axtask::current()
+            .task_ext()
+            .aspace
+            .lock()
+            .handle_page_fault(vaddr, access_flags)
+        {
+            ax_println!("{}: segmentation fault, exit!", axtask::current().id_name());
+            axtask::exit(-1);
+        } else {
+            ax_println!("{}: handle page fault OK!", axtask::current().id_name());
+        }
+        true
+    } else {
+        false
+    }
+}
+

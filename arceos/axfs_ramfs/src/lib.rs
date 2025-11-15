@@ -28,7 +28,7 @@ pub struct RamFileSystem {
 impl RamFileSystem {
     /// Create a new instance.
     pub fn new() -> Self {
-        log::error!("[lib.rs] call ramfs new()");
+        // log::error!("[lib.rs] call ramfs new()");
         Self {
             parent: Once::new(),
             root: DirNode::new(None),
@@ -52,7 +52,7 @@ impl VfsOps for RamFileSystem {
     }
 
     fn root_dir(&self) -> VfsNodeRef {
-        log::error!("[lib] call root_dir");
+        // log::error!("[lib] call root_dir");
         self.root.clone()
     }
 }
