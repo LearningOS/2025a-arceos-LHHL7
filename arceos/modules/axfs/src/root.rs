@@ -180,10 +180,11 @@ pub(crate) fn init_rootfs(disk: Option<crate::dev::Disk>) {
     log::error!("COMPILING: fatfs branch");
 
     cfg_if::cfg_if! {
-        if #[cfg(feature = "ramfs")] {// 新增：优先使用 ramfs
-            let main_fs = mounts::ramfs();
-            info!("Using RAMFS as main filesystem");
-        }else if #[cfg(feature = "myfs")] { // override the default filesystem
+        // if #[cfg(feature = "ramfs")] {// 新增：优先使用 ramfs
+        //     let main_fs = mounts::ramfs();
+        //     info!("Using RAMFS as main filesystem");
+        // }else
+        if #[cfg(feature = "myfs")] { // override the default filesystem
             let main_fs = fs::myfs::new_myfs(disk.unwrap());
         }
         else if #[cfg(feature = "fatfs")] {
