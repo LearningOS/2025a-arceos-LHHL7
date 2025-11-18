@@ -1,6 +1,8 @@
 # QEMU arguments
 
-QEMU := qemu-system-$(ARCH)
+#change qemu
+QEMU := qemu-system-riscv64-new
+# QEMU := qemu-system-$(ARCH)
 
 ifeq ($(BUS), mmio)
   vdev-suffix := device
